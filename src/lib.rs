@@ -114,7 +114,10 @@
 
 extern crate proc_macro;
 
+mod faultmsg;
 mod getters;
+mod getters2;
+//mod consume;
 
 use std::convert::From;
 use std::iter::Extend;
@@ -148,4 +151,14 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 /*
 /// # Consume
 /// Generate a consume method on the struct. Moves all struct members into a tuple.
+#[proc_macro_derive(Consume)]
+pub fn consume(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    let struct_Name = &ast.ident;
+    let (impl_generics, struct_generics, where_caluse) = ast.generics.split_for_impl();
+
+    let fields = getters::isolate_named_fields(&ast).unwrap();
+    let tuple = consume::fields_tuple(&fields).unwrap();
+}
 */

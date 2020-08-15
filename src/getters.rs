@@ -1,4 +1,4 @@
-//! Getters Definition
+//! Getters internals
 
 use std::convert::From;
 use std::iter::Extend;
@@ -112,7 +112,10 @@ pub fn getters_from_fields(fields: &FieldsNamed) -> Vec<proc_macro2::TokenStream
     fields.named
         .iter()
         .map(|field| {
-            let field_name = field.ident.as_ref().unwrap(); // Must never fail.
+            let field_name = field.ident
+                .as_ref()
+                .expect("Fields must be named.");
+            
             let returns = &field.ty;
             let maybie_lifetime = match &field.ty {
                 Type::Reference(type_reference) => type_reference.lifetime.as_ref(),
