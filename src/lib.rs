@@ -116,34 +116,12 @@ use std::convert::TryFrom;
 extern crate proc_macro;
 
 mod faultmsg;
-//mod getters;
-mod getters2;
+mod getters;
 //mod consume;
 
 use std::convert::From;
 
 use syn::{DeriveInput, parse_macro_input};
-
-/*
-#[proc_macro_derive(Getters, attributes(getter))]
-pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
- 
-    let struct_name = &ast.ident;
-    let (impl_generics, struct_generics, where_clause) = ast.generics.split_for_impl();
-    
-    let fields = getters::isolate_named_fields(&ast).unwrap();
-    let methods = getters::getters_from_fields(fields);
-    
-    quote!(
-        impl #impl_generics #struct_name #struct_generics
-            #where_clause
-        {
-            #(#methods)*
-        }
-    ).into()
-}
-*/
 
 /// # Getters
 /// Generate getter methods for all named struct fields in a seperate struct `impl` block.
@@ -153,7 +131,7 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 pub fn getters2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     
-    getters2::NamedStruct::try_from(&ast)
+    getters::NamedStruct::try_from(&ast)
         .map(|ns| ns.emit())
         .unwrap_or_else(|err| err.to_compile_error())
         .into()

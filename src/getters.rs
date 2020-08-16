@@ -1,164 +1,223 @@
 //! Getters internals
 
-use std::convert::From;
-use std::iter::Extend;
+use std::convert::TryFrom;
 
-use proc_macro2::{TokenTree, TokenStream, Delimiter};
+use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{
     Data,
+    DataStruct,
     Fields,
     DeriveInput,
     FieldsNamed,
     Type,
     AttrStyle,
     Ident,
-    Lit,
-    parse_str,
+    LitStr,
+    Result,
+    Error,
+    Attribute,
+    parse::{Parse, ParseStream},
 };
 
-static INVALID_STRUCT: &str = "Struct must be a named struct. Not unnamed or unit.";
-static INVALID_VARIANT: &str = "Variant must be a struct. Not an enum or union.";
-static VALID_ATTR: &str = "Either #[getter(skip)] or #[getter(rename=\"name\")].";
+use crate::faultmsg::{StructIs, Problem};
 
-enum FieldAttribute {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Action {    
     Skip,
     Rename(Ident),
 }
 
-fn parse_attribute_tokens(token_stream: TokenStream) -> FieldAttribute {
-    // There must be tokens
-    let first_token_tree = token_stream
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| panic!("The getter attribute has no tokens. {}", VALID_ATTR));
-
-    // First token tree needs to be a parentheses grouping
-    let mut inner_token_iter = match first_token_tree {
-        TokenTree::Group(group) => match group.delimiter() {
-            Delimiter::Parenthesis => group
-                .stream()
-                .into_iter(),
-            _ => panic!("The getter attribute grouping must be parentheses. {}",
-                        VALID_ATTR),
-        },
-        _ => panic!("The getter attribute must have a grouping. {}", VALID_ATTR),
-    };
-
-    let second_token_tree = inner_token_iter
-        .next()
-        .unwrap_or_else(|| panic!("No getter option has been specified. {}", VALID_ATTR));
-
-    let third_token_tree = inner_token_iter.next();
-    let fourth_token_tree = inner_token_iter.next();
-    let fifth_token_tree = inner_token_iter.next();
-
-    // Second token needs to be either skip or rename
-    match second_token_tree {
-        TokenTree::Ident(ident) => if ident == "skip" {
-            // Check if more tokens follow.
-            if third_token_tree.is_some() {
-                panic!("No further tokens must follow skip. {}", VALID_ATTR);
+impl Parse for Action {
+    fn parse(input: ParseStream) -> Result<Self> {
+        syn::custom_keyword!(skip);
+        syn::custom_keyword!(rename);
+        
+        if input.peek(skip) {
+            let _ = input.parse::<skip>()?;
+            if !input.is_empty() {
+                Err(Error::new(Span::call_site(), Problem::TokensFollowSkip))
+            } else {
+                Ok(Action::Skip)
             }
-            return FieldAttribute::Skip;
-        } else if ident != "rename" {
-            panic!("Invalid attribute {}. {}", &ident, VALID_ATTR);
-        },
-        _ => panic!("No identifier found. {}", VALID_ATTR),
-    }
-    
-    match third_token_tree {
-        Some(TokenTree::Punct(p)) => if p.as_char() != '=' {
-            panic!("Punctuation must be '='. {}", VALID_ATTR);
-        },
-        _ => panic!("rename must be followed by '=' punctuation. {}", VALID_ATTR),
-    }
-
-    let name = match fourth_token_tree {
-        Some(TokenTree::Literal(l)) => match Lit::new(l) {
-            Lit::Str(lstr) => lstr.value(),
-            _ => panic!("Name literal must be a string. {}", VALID_ATTR),
-        },
-        _ => panic!("Name must be a literal. {}", VALID_ATTR),
-    };
-    
-    if fifth_token_tree.is_some() {
-        panic!("No futher tokens must follow the literal in rename. {}", VALID_ATTR);
-    }
-   
-    let new_name = match parse_str::<Ident>(&name) {
-        Ok(nn) => nn,
-        Err(e) => panic!("{}", e),
-    };
-    
-    FieldAttribute::Rename(new_name)
-}
-
-pub fn isolate_named_fields<'a>(
-    ast: &'a DeriveInput
-) -> Result<&'a FieldsNamed, &'static str> {
-    match ast.data {
-        Data::Struct(ref structure) => {
-            match structure.fields {
-                Fields::Named(ref fields) => Ok(fields),
-                Fields::Unnamed(_) | Fields::Unit => Err(INVALID_STRUCT),
+        } else if input.peek(rename) {
+            let _ = input.parse::<rename>()?;
+            let _ = input.parse::<syn::Token![=]>()?;
+            let name = input.parse::<LitStr>()?;
+            if !input.is_empty() {
+                Err(Error::new(Span::call_site(), Problem::TokensFollowNewName))
+            } else {
+                Ok(Action::Rename(Ident::new(name.value().as_str(), Span::call_site())))
             }
-        },
-        Data::Enum(_) | Data::Union(_) => Err(INVALID_VARIANT),
+        } else {
+            Err(Error::new(Span::call_site(), Problem::InvalidAttribute))
+        }
     }
 }
 
-pub fn getters_from_fields(fields: &FieldsNamed) -> Vec<proc_macro2::TokenStream> {
-    fields.named
-        .iter()
-        .map(|field| {
-            let field_name = field.ident
-                .as_ref()
-                .expect("Fields must be named.");
-            
-            let returns = &field.ty;
-            let maybie_lifetime = match &field.ty {
-                Type::Reference(type_reference) => type_reference.lifetime.as_ref(),
-                _ => None,
-            };
+fn get_action_from(attributes: &[Attribute]) -> Result<Option<Action>> {
+    let mut current: Option<Action> = None;
+    
+    for attr in attributes {
+        if attr.style != AttrStyle::Outer { continue; }
+        
+        if attr.path.is_ident("getter") {
+            current = Some(attr.parse_args::<Action>()?);
+        }
+    }
+    
+    Ok(current)
+}
 
-            // Check for skip or rename field attributes. We deal with the last attribute.
-            let mf_attribute: Option<FieldAttribute> = field.attrs
-                .iter()
-                .fold(None, |m_last, attr| match (attr.path.is_ident("getter"), m_last) {
-                    (true, _) => {
-                        match attr.style {
-                            AttrStyle::Outer => (),
-                            AttrStyle::Inner(_) => panic!(
-                                "The getter attribute is an outer not inner attribute."
-                            ),
-                        }
+pub fn extract_fields<'a>(structure: &'a DataStruct) -> Result<&'a FieldsNamed> {
+    match structure.fields {
+        Fields::Named(ref fields) => Ok(fields),
+        Fields::Unnamed(_) | Fields::Unit => Err(
+            Error::new(Span::call_site(), Problem::UnnamedField)
+        ),
+    }
+}
 
-                        Some(parse_attribute_tokens(attr.tokens.to_owned()))
-                    },
-                    (false, Some(last)) => Some(last),
-                    (false, None) => None,
-                });            
+pub fn extract_struct<'a>(node: &'a DeriveInput) -> Result<&'a DataStruct> {
+    match node.data {
+        Data::Struct(ref structure) => Ok(structure),
+        Data::Enum(_) => Err(
+            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Enum))
+        ),
+        Data::Union(_) => Err(
+            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Union))
+        ),
+    }
+}
 
-            let maybie_getter_name: Option<&Ident> = match mf_attribute {
-                Some(FieldAttribute::Rename(ref name)) => Some(name),
-                Some(FieldAttribute::Skip) => None,
-                None => Some(field_name)
-            };
+pub struct Field {
+    ty: Type,    
+    name: Ident,
+    getter: Ident,
+}
 
-            match (maybie_lifetime, maybie_getter_name) {
-                (Some(lifetime), Some(getter_name)) => quote!(
+impl Field {
+    fn from_field(field: &syn::Field) -> Result<Option<Self>> {
+        let name: Ident =  field.ident
+            .clone()
+            .ok_or(Error::new(Span::call_site(), Problem::UnnamedField))?;
+        
+        match get_action_from(field.attrs.as_slice())? {
+            Some(Action::Skip) => return Ok(None),
+            Some(Action::Rename(ident)) => Ok(Some(Field {
+                ty: field.ty.clone(),
+                name: name,
+                getter: ident,
+            })),
+            None => Ok(Some(Field {
+                ty: field.ty.clone(),
+                name: name.clone(),
+                getter: name,
+            })),
+        }
+    }
+    
+    fn from_fields_named(fields_named: &FieldsNamed) -> Result<Vec<Self>> {
+        fields_named.named
+            .iter()
+            .try_fold(Vec::new(), |mut fields, field| {
+                if let Some(field) = Field::from_field(field)? {
+                    fields.push(field);
+                }
+
+                Ok(fields)
+            })
+    }
+
+    fn emit(&self) -> TokenStream {
+        let returns = &self.ty;
+        let field_name = &self.name;
+        let getter_name = &self.getter;
+        
+        match &self.ty {
+            Type::Reference(tr) => {
+                let lifetime = tr.lifetime.as_ref();
+                quote!(
                     pub fn #getter_name(&#lifetime self) -> #returns {
                         self.#field_name
                     }
-                ),
-                (None, Some(getter_name)) => quote!(
+                )
+            },
+            _ => {
+                quote!(
                     pub fn #getter_name(&self) -> &#returns {
                         &self.#field_name
                     }
-                ),
-                (_, None) => quote!(),
+                )
+            },
+        }
+    }
+}
+
+pub struct NamedStruct<'a> {
+    original: &'a DeriveInput,
+    name: Ident,
+    fields: Vec<Field>,
+}
+
+impl<'a> NamedStruct<'a> {
+    pub fn emit(&self) -> TokenStream {
+        let (impl_generics, struct_generics, where_clause) = self.original.generics
+            .split_for_impl();        
+        let struct_name = &self.name;
+        let methods: Vec<TokenStream> = self.fields
+            .iter()
+            .map(|field| field.emit())
+            .collect();
+
+        quote!(
+            impl #impl_generics #struct_name #struct_generics
+                #where_clause
+            {
+                #(#methods)*
             }
+        )        
+    }
+}
+
+impl<'a> TryFrom<&'a DeriveInput> for NamedStruct<'a> {
+    type Error = Error;
+    
+    fn try_from(node: &'a DeriveInput) -> Result<Self> {
+        let struct_data = extract_struct(node)?;
+        let named_fields = extract_fields(struct_data)?;
+        let fields = Field::from_fields_named(named_fields)?;
+
+        Ok(NamedStruct {
+            original: node,
+            name: node.ident.clone(),
+            fields,
         })
-        .collect()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parse_action() -> Result<()> {
+        let a: Action = syn::parse_str("skip")?;
+        assert!(a == Action::Skip);
+
+        let r: Result<Action> = syn::parse_str("skip = blah");
+        assert!(r.is_err());
+
+        let a: Action = syn::parse_str("rename = \"hello\"")?;
+        let check = Action::Rename(Ident::new("hello", Span::call_site()));
+        assert!(a == check);
+
+        let r: Result<Action> = syn::parse_str("rename + \"chooga\"");        
+        assert!(r.is_err());
+
+        let r: Result<Action> = syn::parse_str("rename = \"chooga\" | bongle");
+        assert!(r.is_err());
+
+        Ok(())
+    }
 }
