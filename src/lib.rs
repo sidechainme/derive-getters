@@ -2,9 +2,11 @@
 //! named structs. It will generate getters that will reside in the struct namespace.
 //!
 //! # Derives
+//!
 //! Only named structs can derive `Getters`.
 //!
 //! # Methods generated
+//!
 //! The getter methods generated shall bear the same name as the struct fields and be
 //! publicly visible. The methods return an immutable reference to the struct field of the
 //! same name. If there is already a method defined with that name there'll be a collision.
@@ -105,21 +107,16 @@
 use std::convert::TryFrom;
 
 extern crate proc_macro;
+use syn::{DeriveInput, parse_macro_input};
 
 mod faultmsg;
 mod getters;
-//mod consume;
 
-use std::convert::From;
-
-use syn::{DeriveInput, parse_macro_input};
-
-/// # Getters
 /// Generate getter methods for all named struct fields in a seperate struct `impl` block.
 /// Getter methods share the name of the field they're 'getting'. Methods return an
 /// immutable reference to the field.
 #[proc_macro_derive(Getters, attributes(getter))]
-pub fn getters2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     
     getters::NamedStruct::try_from(&ast)
@@ -127,18 +124,3 @@ pub fn getters2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
-
-/*
-/// # Consume
-/// Generate a consume method on the struct. Moves all struct members into a tuple.
-#[proc_macro_derive(Consume)]
-pub fn consume(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
-
-    let struct_Name = &ast.ident;
-    let (impl_generics, struct_generics, where_caluse) = ast.generics.split_for_impl();
-
-    let fields = getters::isolate_named_fields(&ast).unwrap();
-    let tuple = consume::fields_tuple(&fields).unwrap();
-}
-*/
