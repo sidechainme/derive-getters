@@ -1,33 +1,20 @@
-//! # Derive Getters
-//! A procedural macro for autogenerating getters. It can only be used on named structs.
-//! It will generate getters that will reside in the struct namespace through an impl.
+//! This library provides a derive macro for autogenerating getters. It can only be used on
+//! named structs. It will generate getters that will reside in the struct namespace.
 //!
-//! ## Derives
-//! Only named structs can derive `Getters`. Unit structs, unnamed structs, enums and
-//! unions cannot derive `Getters`.
+//! # Derives
+//! Only named structs can derive `Getters`.
 //!
-//! ## Methods generated
+//! # Methods generated
 //! The getter methods generated shall bear the same name as the struct fields and be
 //! publicly visible. The methods return an immutable reference to the struct field of the
 //! same name. If there is already a method defined with that name there'll be a collision.
 //! In these cases one of two attributes can be set to either `skip` or `rename` the getter.
 //! 
 //!
-//! ## Usage
-//! Add to your project Cargo.toml;
-//! ```toml
-//! [dependencies]
-//! derive-getters = "0.1.0"
-//! ```
+//! # Usage
 //!
 //! In lib.rs or main.rs;
-//! ```edition2018
-//! use derive_getters::Getters;
-//! #
-//! # fn main() { }
-//! ```
 //!
-//! ### Named Structs
 //! ```edition2018
 //! use derive_getters::Getters;
 //!
@@ -45,8 +32,8 @@
 //! Here, a method called `num()` has been created for the `Number` struct which gives a
 //! reference to the `num` field.
 //!
-//! ### Generic Types
 //! This macro can also derive on structs that have simple generic types. For example;
+//!
 //! ```edition2018
 //! # use derive_getters::Getters;
 //! #[derive(Getters)]
@@ -84,7 +71,7 @@
 //! # fn main() { }
 //! ```
 //!
-//! ### Attributes
+//! # Attributes
 //! Getters can be further configured to either skip or rename a getter.
 //!
 //! * #[getter(skip)]
@@ -109,7 +96,11 @@
 //! # fn main() { }
 //! ```
 //!
-//! ## Cannot Do
+//! # Panics
+//!
+//! If getters are derived on unit structs, unnamed structs, enums or unions.
+//!
+//! # Cannot Do
 //! Const generics aren't handled by this macro nor are they tested.
 use std::convert::TryFrom;
 

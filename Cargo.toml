@@ -4,14 +4,12 @@ version = "0.1.0"
 authors = ["Stephan Luther <kvsari@gmail.com>"]
 license = "MIT"
 description = "Simple boilerplate getters generator."
-repository = "https://github.com/kvsari/derive-getters"
-keywords = ["getter", "getters"]
+repository = "https://git.sr.ht/~kvsari/derive-getters"
+keywords = ["getter", "getters", "derive", "macro"]
+categories = ["development-tools::procedural-macro-helpers"]
 edition = "2018"
 autotests = false
 readme = "README.md"
-
-[badges]
-travis-ci = { repository = "kvsari/derive-getters" }
 
 [lib]
 name = "derive_getters"
@@ -29,3 +27,4 @@ proc-macro2 = "1.0"
 [dev-dependencies]
 trybuild = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+version-sync = "0.9"
