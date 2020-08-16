@@ -1,5 +1,5 @@
 //! Error type. 
-use std::{fmt, error};
+use std::fmt;
 
 #[derive(Debug)]
 pub enum StructIs {

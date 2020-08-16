@@ -111,24 +111,20 @@
 //!
 //! ## Cannot Do
 //! Const generics aren't handled by this macro nor are they tested.
+use std::convert::TryFrom;
 
 extern crate proc_macro;
 
 mod faultmsg;
-mod getters;
+//mod getters;
 mod getters2;
 //mod consume;
 
 use std::convert::From;
-use std::iter::Extend;
 
-use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-/// # Getters
-/// Generate getter methods for all named struct fields in a seperate struct `impl` block.
-/// Getter methods share the name of the field they're 'getting'. Methods return an
-/// immutable reference to the field.
+/*
 #[proc_macro_derive(Getters, attributes(getter))]
 pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -146,6 +142,21 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             #(#methods)*
         }
     ).into()
+}
+*/
+
+/// # Getters
+/// Generate getter methods for all named struct fields in a seperate struct `impl` block.
+/// Getter methods share the name of the field they're 'getting'. Methods return an
+/// immutable reference to the field.
+#[proc_macro_derive(Getters, attributes(getter))]
+pub fn getters2(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+    
+    getters2::NamedStruct::try_from(&ast)
+        .map(|ns| ns.emit())
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 /*

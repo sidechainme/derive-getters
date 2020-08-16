@@ -1,11 +1,8 @@
 //! Getters internals
 
-use std::{
-    convert::TryFrom,
-    iter::Extend,
-};
+use std::convert::TryFrom;
 
-use proc_macro2::{TokenTree, TokenStream, Delimiter, Span};
+use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{
     Data,
@@ -20,16 +17,12 @@ use syn::{
     Result,
     Error,
     Attribute,
-    parse_str,
-    parse::{Parse, ParseStream, Nothing},
+    parse::{Parse, ParseStream},
 };
 
 use crate::faultmsg::{StructIs, Problem};
 
-static INVALID_STRUCT: &str = "Struct must be a named struct. Not unnamed or unit.";
-static INVALID_VARIANT: &str = "Variant must be a struct. Not an enum or union.";
-static VALID_ATTR: &str = "Either #[getter(skip)] or #[getter(rename=\"name\")].";
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Action {    
     Skip,
     Rename(Ident),
@@ -98,23 +91,28 @@ pub fn extract_struct<'a>(node: &'a DeriveInput) -> Result<&'a DataStruct> {
 }
 
 pub struct Field {
-    ty: Type,
+    ty: Type,    
     name: Ident,
+    getter: Ident,
 }
 
 impl Field {
     fn from_field(field: &syn::Field) -> Result<Option<Self>> {
+        let name: Ident =  field.ident
+            .clone()
+            .ok_or(Error::new(Span::call_site(), Problem::UnnamedField))?;
+        
         match get_action_from(field.attrs.as_slice())? {
             Some(Action::Skip) => return Ok(None),
             Some(Action::Rename(ident)) => Ok(Some(Field {
                 ty: field.ty.clone(),
-                name: ident,
+                name: name,
+                getter: ident,
             })),
             None => Ok(Some(Field {
                 ty: field.ty.clone(),
-                name: field.ident
-                    .clone()
-                    .ok_or(Error::new(Span::call_site(), Problem::UnnamedField))?,
+                name: name.clone(),
+                getter: name,
             })),
         }
     }
@@ -130,12 +128,56 @@ impl Field {
                 Ok(fields)
             })
     }
+
+    fn emit(&self) -> TokenStream {
+        let returns = &self.ty;
+        let field_name = &self.name;
+        let getter_name = &self.getter;
+        
+        match &self.ty {
+            Type::Reference(tr) => {
+                let lifetime = tr.lifetime.as_ref();
+                quote!(
+                    pub fn #getter_name(&#lifetime self) -> #returns {
+                        self.#field_name
+                    }
+                )
+            },
+            _ => {
+                quote!(
+                    pub fn #getter_name(&self) -> &#returns {
+                        &self.#field_name
+                    }
+                )
+            },
+        }
+    }
 }
 
 pub struct NamedStruct<'a> {
     original: &'a DeriveInput,
     name: Ident,
     fields: Vec<Field>,
+}
+
+impl<'a> NamedStruct<'a> {
+    pub fn emit(&self) -> TokenStream {
+        let (impl_generics, struct_generics, where_clause) = self.original.generics
+            .split_for_impl();        
+        let struct_name = &self.name;
+        let methods: Vec<TokenStream> = self.fields
+            .iter()
+            .map(|field| field.emit())
+            .collect();
+
+        quote!(
+            impl #impl_generics #struct_name #struct_generics
+                #where_clause
+            {
+                #(#methods)*
+            }
+        )        
+    }
 }
 
 impl<'a> TryFrom<&'a DeriveInput> for NamedStruct<'a> {
@@ -154,25 +196,28 @@ impl<'a> TryFrom<&'a DeriveInput> for NamedStruct<'a> {
     }
 }
 
-/*
-pub fn expand(ast: &DeriveInput) -> Result<proc_macro::TokenStream> {
-    let struct_name = &ast.ident;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    /*
-    let (impl_generics, struct_generics, where_clause) = ast.generics.split_for_impl();
-    
-    let fields = isolate_named_fields(&ast)?;
-    let methods = getters_from_fields(fields)?;
-    */
-    
-    Ok(
-        quote!(
-            impl #impl_generics #struct_name #struct_generics
-                #where_clause
-            {
-                #(#methods)*
-            }
-        ).into()
-    )
+    #[test]
+    fn parse_action() -> Result<()> {
+        let a: Action = syn::parse_str("skip")?;
+        assert!(a == Action::Skip);
+
+        let r: Result<Action> = syn::parse_str("skip = blah");
+        assert!(r.is_err());
+
+        let a: Action = syn::parse_str("rename = \"hello\"")?;
+        let check = Action::Rename(Ident::new("hello", Span::call_site()));
+        assert!(a == check);
+
+        let r: Result<Action> = syn::parse_str("rename + \"chooga\"");        
+        assert!(r.is_err());
+
+        let r: Result<Action> = syn::parse_str("rename = \"chooga\" | bongle");
+        assert!(r.is_err());
+
+        Ok(())
+    }
 }
-*/
