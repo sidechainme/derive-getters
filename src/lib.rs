@@ -110,6 +110,7 @@ extern crate proc_macro;
 use syn::{DeriveInput, parse_macro_input};
 
 mod faultmsg;
+mod dissolve;
 mod getters;
 
 /// Generate getter methods for all named struct fields in a seperate struct `impl` block.
@@ -120,6 +121,18 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     
     getters::NamedStruct::try_from(&ast)
+        .map(|ns| ns.emit())
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Produce a `dissolve` method that consumes the named struct returning a tuple of all the
+/// the struct fields.
+#[proc_macro_derive(Dissolve)]
+pub fn dissolve(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    dissolve::NamedStruct::try_from(&ast)
         .map(|ns| ns.emit())
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
