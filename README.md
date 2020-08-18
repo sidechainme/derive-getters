@@ -12,14 +12,14 @@ With regards to `Dissolve`, sometimes during conversion a structure must be cons
 There are no mutable getters and it's not planned. There are no setters either nor will there ever be.
 
 ## Rust Docs
-[Documentation is here.](https://docs.rs/derive-getters/0.1.1)
+[Documentation is here.](https://docs.rs/derive-getters/0.2.0)
 
 ## Installation
 
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-derive-getters = "0.1.1"
+derive-getters = "0.2.0"
 ```
 
 Then import the `Getters` or `Dissolve` macro in whichever module it's needed (assuming 2018 edition).
@@ -57,7 +57,7 @@ impl MyCheesyStruct {
 }
 ```
 
-This crate can also handle structs with simple generic parameters and lifetime annotations. Check [docs](https://docs.rs/derive-getters/0.1.1) for further details.
+This crate can also handle structs with simple generic parameters and lifetime annotations. Check [docs](https://docs.rs/derive-getters/0.2.0) for further details.
 ```rust
 #[derive(Getters)]
 pub struct StructWithGeneric<'a, T> {
