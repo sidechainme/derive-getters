@@ -8,6 +8,7 @@ fn tests() {
     t.pass("tests/05-skip-rename-attributes.rs");
     t.pass("tests/06-plays-with-others.rs");
     t.pass("tests/07-dissolve-basic.rs");
+    t.pass("tests/08-dissolve-generic-and-ref.rs");    
 }
 
 #[test]

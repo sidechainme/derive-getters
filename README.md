@@ -1,10 +1,12 @@
 # Derive Getters
 
-Simple derive macro for generating field getter methods on a named struct.
+Simple `Getters` derive macro for generating field getter methods on a named struct. Included is an additional derive, `Dissolve`, that consumes the named struct returning a tuple of all fields in the order they were declared.
 
-The need for this macro came about when I was making various data structures for JSON to deserialize into. These data structures had many fields in them to access and they weren't going to change once created. One could use `pub` everywhere but that would enable mutating the fields which is what this derive aims to avoid.
+The need for the `Getters` macro came about when I was making various data structures for JSON to deserialize into. These data structures had many fields in them to access and they weren't going to change once created. One could use `pub` everywhere but that would enable mutating the fields which is what this derive aims to avoid.
 
 Getters will be generated according to [convention](https://github.com/rust-lang/rfcs/blob/master/text/0344-conventions-galore.md#gettersetter-apis). This means that the generated methods will reside within the struct namespace.
+
+With regards to `Dissolve`, sometimes during conversion a structure must be consumed. One easy way to do this is to return a tuple of all the structs fields. Thus `Dissolve` can be considered a 'get (move) everything' method call.
 
 ## What this crate won't do
 There are no mutable getters and it's not planned. There are no setters either nor will there ever be.
@@ -20,9 +22,9 @@ Add to your `Cargo.toml`:
 derive-getters = "0.1.1"
 ```
 
-Then import the `Getters` macro in whichever module it's needed (assuming 2018 edition).
+Then import the `Getters` or `Dissolve` macro in whichever module it's needed (assuming 2018 edition).
 ```rust
-use derive_getters::Getters;
+use derive_getters::{Getters, Dissolve};
 
 ```
 Otherwise just import at crate root.
@@ -65,13 +67,35 @@ pub struct StructWithGeneric<'a, T> {
 }
 ```
 
+With `Dissolve`, use it like so;
+```rust
+#[derive(Dissolve)]
+pub struct Solid {
+    a: u64,
+    b: f64,
+    c: i64,
+}
+```
+
+An impl will be produced for `Solid` like so;
+```rust
+impl Solid {
+    pub fn dissolve(self) -> (u64, f64, i64) {
+      (self.a, self.b, self.c)
+    }
+}
+```
+
 ### Attributes
-This macro comes with two optional field attributes.
+This macro comes with two optional field attributes for `Getters`.
 * `#[getter(skip)]` to skip generating getters for a field.
 * `#[getter(rename = "name")]` to change the getter name to "name".
 
+And one optional struct attribute for `Dissolve`.
+* `#[dissolve(rename = "name")]` to change the name of the dissolve function to "name".
+
 ## Caveats
-1. Will not work on unit structs, tuples or enums. Derive `Getters` over them and the macro will chuck a wobbly.
+1. Will not work on unit structs, tuples or enums. Derive `Getters` or `Dissolve` over them and the macro will chuck a wobbly.
 2. All getter methods return an immutable reference, `&`, to their field. This means for some types it can get awkward.
 
 ## Alternatives

@@ -1,11 +1,12 @@
-//! This library provides a derive macro for autogenerating getters. It can only be used on
-//! named structs. It will generate getters that will reside in the struct namespace.
+//! This library provides two derive macros. One, `Getters` for autogenerating getters and
+//! `Dissolve` for consuming a struct returning a tuple of all fields. They can only be
+//! used on named structs.
 //!
 //! # Derives
 //!
-//! Only named structs can derive `Getters`.
+//! Only named structs can derive `Getters` or `Dissolve`.
 //!
-//! # Methods generated
+//! # `Getter` methods generated
 //!
 //! The getter methods generated shall bear the same name as the struct fields and be
 //! publicly visible. The methods return an immutable reference to the struct field of the
@@ -13,7 +14,7 @@
 //! In these cases one of two attributes can be set to either `skip` or `rename` the getter.
 //! 
 //!
-//! # Usage
+//! # `Getters` Usage
 //!
 //! In lib.rs or main.rs;
 //!
@@ -73,7 +74,7 @@
 //! # fn main() { }
 //! ```
 //!
-//! # Attributes
+//! # `Getter` Attributes
 //! Getters can be further configured to either skip or rename a getter.
 //!
 //! * #[getter(skip)]
@@ -98,9 +99,58 @@
 //! # fn main() { }
 //! ```
 //!
+//! # `Dissolve` method generated
+//!
+//! Deriving `Dissolve` on a named struct will generate a method `dissolve(self)` which
+//! shall return a tuple of all struct fields in the order they were defined. Calling this
+//! method consumes the struct. The name of this method can be changed with an attribute.
+//!
+//! # `Dissolve` usage
+//!
+//! ```edition2018
+//! # use derive_getters::Dissolve;
+//! #[derive(Dissolve)]
+//! struct Stuff {
+//!     name: String,
+//!     price: f64,
+//!     count: usize,
+//! }
+//! 
+//! fn main() {
+//!     let stuff = Stuff {
+//!         name: "Hogie".to_owned(),
+//!         price: 123.4f64,
+//!         count: 100,
+//!     };
+//!
+//!     let (n, p, c) = stuff.dissolve();
+//!     assert!(n == "Hogie");
+//!     assert!(p == 123.4f64);
+//!     assert!(c == 100);
+//! }
+//! ```
+//!
+//! # `Dissolve` Attributes
+//! You can rename the `dissolve` function by using a struct attribute.
+//!
+//! * #[dissolve(rename = "name")]
+//!
+//! ```edition2018
+//! # use derive_getters::Dissolve;
+//! #[derive(Dissolve)]
+//! #[dissolve(rename = "shatter")]
+//! struct Numbers {
+//!     a: u64,
+//!     b: i64,
+//!     c: f64,
+//! }
+//! #
+//! # fn main() { }
+//! ```
+//!
 //! # Panics
 //!
-//! If getters are derived on unit structs, unnamed structs, enums or unions.
+//! If `Getters` or `Dissolve` are derived on unit or unnamed structs, enums or unions.
 //!
 //! # Cannot Do
 //! Const generics aren't handled by this macro nor are they tested.
@@ -112,6 +162,7 @@ use syn::{DeriveInput, parse_macro_input};
 mod faultmsg;
 mod dissolve;
 mod getters;
+mod extract;
 
 /// Generate getter methods for all named struct fields in a seperate struct `impl` block.
 /// Getter methods share the name of the field they're 'getting'. Methods return an
@@ -128,7 +179,7 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 /// Produce a `dissolve` method that consumes the named struct returning a tuple of all the
 /// the struct fields.
-#[proc_macro_derive(Dissolve)]
+#[proc_macro_derive(Dissolve, attributes(dissolve))]
 pub fn dissolve(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 

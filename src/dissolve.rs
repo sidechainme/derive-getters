@@ -7,9 +7,6 @@ use std::{
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{
-    Data,
-    DataStruct,
-    Fields,
     DeriveInput,
     FieldsNamed,
     Type,
@@ -17,32 +14,18 @@ use syn::{
     Result,
     Error,
     TypeTuple,
+    AttrStyle,
+    LitStr,
+    Attribute,
     token::Paren,
     punctuated::Punctuated,
+    parse::{Parse, ParseStream},
 };
 
-use crate::faultmsg::{StructIs, Problem};
-
-pub fn extract_fields<'a>(structure: &'a DataStruct) -> Result<&'a FieldsNamed> {
-    match structure.fields {
-        Fields::Named(ref fields) => Ok(fields),
-        Fields::Unnamed(_) | Fields::Unit => Err(
-            Error::new(Span::call_site(), Problem::UnnamedField)
-        ),
-    }
-}
-
-pub fn extract_struct<'a>(node: &'a DeriveInput) -> Result<&'a DataStruct> {
-    match node.data {
-        Data::Struct(ref structure) => Ok(structure),
-        Data::Enum(_) => Err(
-            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Enum))
-        ),
-        Data::Union(_) => Err(
-            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Union))
-        ),
-    }
-}
+use crate::{
+    extract::{named_fields, named_struct},
+    faultmsg::Problem,
+};
 
 pub struct Field {
     ty: Type,    
@@ -69,10 +52,50 @@ impl Field {
     }
 }
 
+struct Rename {
+    name: Ident,
+}
+
+impl Parse for Rename {
+    fn parse(input: ParseStream) -> Result<Self> {
+        syn::custom_keyword!(rename);
+
+        if input.peek(rename) {
+            let _ = input.parse::<rename>()?;
+            let _ = input.parse::<syn::Token![=]>()?;
+            let name = input.parse::<LitStr>()?;
+            if !input.is_empty() {
+                Err(Error::new(Span::call_site(), Problem::TokensFollowNewName))
+            } else {
+                let name = Ident::new(name.value().as_str(), Span::call_site());
+                Ok(Rename { name } )
+            }
+        } else {
+            Err(Error::new(Span::call_site(), Problem::InvalidAttribute))
+        }
+    }
+}
+
+fn dissolve_rename_from(attributes: &[Attribute]) -> Result<Option<Ident>> {
+    let mut current: Option<Ident> = None;
+
+    for attr in attributes {
+        if attr.style != AttrStyle::Outer { continue; }
+
+        if attr.path.is_ident("dissolve") {
+            let rename = attr.parse_args::<Rename>()?;
+            current = Some(rename.name);
+        }
+    }
+
+    Ok(current)
+}
+
 pub struct NamedStruct<'a> {
     original: &'a DeriveInput,
     name: Ident,
     fields: Vec<Field>,
+    dissolve_rename: Option<Ident>,
 }
 
 impl<'a> NamedStruct<'a> {
@@ -110,12 +133,17 @@ impl<'a> NamedStruct<'a> {
 
                 ts
             });
+
+        let dissolve = Ident::new("dissolve", Span::call_site());
+        let fn_name = self.dissolve_rename
+            .as_ref()
+            .unwrap_or(&dissolve);
         
         quote!(
             impl #impl_generics #struct_name #struct_generics
                 #where_clause
             {
-                pub fn dissolve(self) -> #type_tuple {
+                pub fn #fn_name(self) -> #type_tuple {
                     (
                         #fields
                     )
@@ -129,14 +157,16 @@ impl<'a> TryFrom<&'a DeriveInput> for NamedStruct<'a> {
     type Error = Error;
     
     fn try_from(node: &'a DeriveInput) -> Result<Self> {
-        let struct_data = extract_struct(node)?;
-        let named_fields = extract_fields(struct_data)?;
+        let struct_data = named_struct(node)?;
+        let named_fields = named_fields(struct_data)?;
         let fields = Field::from_fields_named(named_fields)?;
+        let rename = dissolve_rename_from(node.attrs.as_slice())?;
 
         Ok(NamedStruct {
             original: node,
             name: node.ident.clone(),
             fields,
+            dissolve_rename: rename,
         })
     }
 }

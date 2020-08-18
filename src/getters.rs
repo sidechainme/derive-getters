@@ -1,13 +1,9 @@
 //! Getters internals
-
 use std::convert::TryFrom;
 
 use proc_macro2::{TokenStream, Span};
 use quote::quote;
 use syn::{
-    Data,
-    DataStruct,
-    Fields,
     DeriveInput,
     FieldsNamed,
     Type,
@@ -20,7 +16,10 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-use crate::faultmsg::{StructIs, Problem};
+use crate::{
+    extract::{named_fields, named_struct},
+    faultmsg::Problem,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Action {    
@@ -67,27 +66,6 @@ fn get_action_from(attributes: &[Attribute]) -> Result<Option<Action>> {
     }
     
     Ok(current)
-}
-
-pub fn extract_fields<'a>(structure: &'a DataStruct) -> Result<&'a FieldsNamed> {
-    match structure.fields {
-        Fields::Named(ref fields) => Ok(fields),
-        Fields::Unnamed(_) | Fields::Unit => Err(
-            Error::new(Span::call_site(), Problem::UnnamedField)
-        ),
-    }
-}
-
-pub fn extract_struct<'a>(node: &'a DeriveInput) -> Result<&'a DataStruct> {
-    match node.data {
-        Data::Struct(ref structure) => Ok(structure),
-        Data::Enum(_) => Err(
-            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Enum))
-        ),
-        Data::Union(_) => Err(
-            Error::new_spanned(node, Problem::NotNamedStruct(StructIs::Union))
-        ),
-    }
 }
 
 pub struct Field {
@@ -184,8 +162,8 @@ impl<'a> TryFrom<&'a DeriveInput> for NamedStruct<'a> {
     type Error = Error;
     
     fn try_from(node: &'a DeriveInput) -> Result<Self> {
-        let struct_data = extract_struct(node)?;
-        let named_fields = extract_fields(struct_data)?;
+        let struct_data = named_struct(node)?;
+        let named_fields = named_fields(struct_data)?;
         let fields = Field::from_fields_named(named_fields)?;
 
         Ok(NamedStruct {

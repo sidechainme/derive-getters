@@ -44,7 +44,7 @@ impl fmt::Display for Problem {
             },
             Self::UnnamedField => write!(f, "struct fields must be named"),
             Self::InnerAttribute => {
-                write!(f, "getter attribute is an outer not inner attribute")
+                write!(f, "attribute is an outer not inner attribute")
             },
             Self::EmptyAttribute => write!(f, "attribute has no tokens"),
             Self::NoGrouping => write!(f, "attribute tokens must be grouped"),
