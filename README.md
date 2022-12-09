@@ -1,6 +1,6 @@
 # Derive Getters
 
-Simple `Getters` derive macro for generating field getter methods on a named struct. Included is an additional derive, `Dissolve`, that consumes the named struct returning a tuple of all fields in the order they were declared.
+Simple `Getters` derive macro for generating field getter methods on a named struct. Included are three additional derives, `Dissolve`, `DissolveRef` and `DissolveMut`, that consumes/references/mutability references the named struct returning a tuple of all fields in the order they were declared.
 
 The need for the `Getters` macro came about when I was making various data structures for JSON to deserialize into. These data structures had many fields in them to access and they weren't going to change once created. One could use `pub` everywhere but that would enable mutating the fields which is what this derive aims to avoid.
 
