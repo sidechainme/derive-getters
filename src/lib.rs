@@ -161,6 +161,8 @@ use syn::{DeriveInput, parse_macro_input};
 
 mod faultmsg;
 mod dissolve;
+mod dissolve_mut;
+mod dissolve_ref;
 mod getters;
 mod extract;
 
@@ -177,7 +179,7 @@ pub fn getters(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
-/// Produce a `dissolve` method that consumes the named struct returning a tuple of all the
+/// Produce a `dissolve` method that consumes the named struct returning a tuple of all
 /// the struct fields.
 #[proc_macro_derive(Dissolve, attributes(dissolve))]
 pub fn dissolve(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -188,3 +190,28 @@ pub fn dissolve(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
+
+/// Produce a `dissolve_mut` method that mutably references the named struct returning a tuple of
+/// mutable references to all the struct fields.
+#[proc_macro_derive(DissolveMut, attributes(dissolve_mut))]
+pub fn dissolve_mut(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    dissolve_mut::NamedStruct::try_from(&ast)
+        .map(|ns| ns.emit())
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Produce a `dissolve_ref` method that references the named struct returning a tuple of
+/// references to all the struct fields.
+#[proc_macro_derive(DissolveRef, attributes(dissolve_ref))]
+pub fn dissolve_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+    dissolve_ref::NamedStruct::try_from(&ast)
+        .map(|ns| ns.emit())
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+

@@ -1,6 +1,6 @@
 //! Try with generics and references.
 
-use derive_getters::{Getters, Dissolve};
+use derive_getters::{Getters, Dissolve, DissolveMut, DissolveRef};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 struct ConcreteType {
@@ -8,7 +8,7 @@ struct ConcreteType {
     b: i64,
 }
 
-#[derive(Getters, Dissolve)]
+#[derive(Getters, Dissolve, DissolveMut, DissolveRef)]
 struct MultiAnnotated<'a, 'b, 'c, T> {
     v1: &'a str,
     v2: &'b [u8],
@@ -22,8 +22,10 @@ impl<'a, 'b, 'c, T> MultiAnnotated<'a, 'b, 'c, T> {
     }
 }
 
-#[derive(Getters, Dissolve)]
+#[derive(Getters, Dissolve, DissolveMut, DissolveRef)]
 #[dissolve(rename = "unmake")]
+#[dissolve_mut(rename = "unmake_mut")]
+#[dissolve_ref(rename = "unmake_ref")]
 struct PolyAnnotated<'a, 'b, 'c, T> {
     v1: &'a str,
     v2: &'b [u8],
